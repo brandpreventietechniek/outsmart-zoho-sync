@@ -2,8 +2,8 @@ name: OutSmart naar Zoho sync
 
 on:
   schedule:
-    - cron: "0 * * * *"   # elk uur (op het hele uur)
-  workflow_dispatch:        # ook handmatig te starten via de knop "Run workflow"
+    - cron: "0 * * * *"
+  workflow_dispatch:
 
 concurrency:
   group: outsmart-zoho-sync
@@ -29,9 +29,9 @@ jobs:
       - name: Benodigdheden installeren
         run: pip install certifi openpyxl
       - name: Relaties synchroniseren
-        run: python koppeling.py relations
+        run: python koppeling.py relations --direction outsmart-to-zoho
       - name: Materialen synchroniseren
-        run: python koppeling.py materials
+        run: python koppeling.py materials --direction outsmart-to-zoho
       - name: Werkbonnen synchroniseren
         run: python koppeling.py workorders-all --until all
       - name: Offertes synchroniseren
