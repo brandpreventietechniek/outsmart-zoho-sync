@@ -907,8 +907,9 @@ def sync_workorders(os_c, zo, dry, all_statuses=False, until=None):
     else:
         wos = os_c.get_workorders()
         log("OutSmart: %d voltooide werkbonnen opgehaald" % len(wos))
-    am = zo.account_lookup_for(str(w.get("CustomerDebtorNr") or "").strip() for w in wos)
-    log("   %d klanten gekoppeld via debiteurnummer." % len(am))
+    log("Klanten indexeren op debiteurnummer...")
+    am = {d: ids[0] for d, ids in zo.records_index("Accounts", "Debiteurnummer_Outsmart").items()}
+    log("   %d klanten geindexeerd." % len(am))
     log("Offertes ophalen (voor offertenummer-koppeling)...")
     quote_map = {}
     for q in os_c.get_quotations():
@@ -975,37 +976,29 @@ def sync_workorders(os_c, zo, dry, all_statuses=False, until=None):
         else:
             to_insert.append((so, w))
     log("   %d bijwerken, %d nieuw invoegen" % (len(to_update), len(to_insert)))
-    triples = []  # (result, werkbon, record-id)
+    results = []  # (result, werkbon)
     if to_update:
         r = zo.update("Sales_Orders", [x[0] for x in to_update])
         for res, (_, w, rid) in zip(r, to_update):
-            triples.append((res, w, rid))
+            results.append((res, w))
+    new_notes = []  # notities alleen voor NIEUW ingevoegde werkbonnen (snel bij herhaalde runs)
     if to_insert:
-        r = zo.insert("Sales_Orders", [x[0] for x in to_insert])
-        for res, (_, w) in zip(r, to_insert):
-            triples.append((res, w, (res.get("details") or {}).get("id")))
-    summarize("Zoho Verkooporders", [t[0] for t in triples])
-    # Logboek als notitie plaatsen/bijwerken
-    notes = 0
-    for res, w, soid in triples:
-        if res.get("status") != "success":
-            continue
-        if not soid:
-            continue
-        lb = build_logboek(w, emp_map)
-        if not lb:
-            continue
-        title = "Werkbon %s - alle gegevens" % (w.get("OrderNr") or "")
-        existing = zo.notes_for("Sales_Orders", soid)
-        mine = next((n for n in existing
-                     if (n.get("Note_Title") or "").startswith(("Logboek werkbon", "Werkbon "))), None)
-        if mine and mine.get("id"):
-            zo.update_note(mine["id"], title, lb)
-        else:
-            zo.create_note("Sales_Orders", soid, title, lb)
-        notes += 1
-    if notes:
-        log("   %d werkbon-notities geplaatst/bijgewerkt (onder Notities)." % notes)
+        for i in range(0, len(to_insert), 100):
+            chunk = to_insert[i:i + 100]
+            r = zo.insert("Sales_Orders", [x[0] for x in chunk])
+            for res, (_, w) in zip(r, chunk):
+                results.append((res, w))
+                if res.get("status") == "success":
+                    soid = (res.get("details") or {}).get("id")
+                    lb = build_logboek(w, emp_map)
+                    if soid and lb:
+                        title = "Werkbon %s - alle gegevens" % (w.get("OrderNr") or "")
+                        new_notes.append((soid, "Sales_Orders", title, lb))
+    summarize("Zoho Verkooporders", [x[0] for x in results])
+    if new_notes:
+        log("Notities plaatsen voor nieuwe werkbonnen (bulk)...")
+        zo.create_notes_bulk(new_notes)
+        log("   %d werkbon-notities geplaatst." % len(new_notes))
 
 
 def wipe_accounts(zo):
