@@ -1,0 +1,42 @@
+name: OutSmart naar Zoho sync
+
+on:
+  schedule:
+    # Elke dag om 06:00 UTC = 08:00 Nederlandse zomertijd (07:00 in de winter).
+    - cron: "0 6 * * *"
+  workflow_dispatch:   # laat je 'm ook handmatig starten via de GitHub-knop "Run workflow"
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Code ophalen
+        uses: actions/checkout@v4
+
+      - name: Python installeren
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Benodigdheden installeren
+        run: pip install certifi openpyxl
+
+      - name: Werkbonnen synchroniseren
+        env:
+          OUTSMART_TOKEN: ${{ secrets.OUTSMART_TOKEN }}
+          OUTSMART_SOFTWARE_TOKEN: ${{ secrets.OUTSMART_SOFTWARE_TOKEN }}
+          ZOHO_CLIENT_ID: ${{ secrets.ZOHO_CLIENT_ID }}
+          ZOHO_CLIENT_SECRET: ${{ secrets.ZOHO_CLIENT_SECRET }}
+          ZOHO_REFRESH_TOKEN: ${{ secrets.ZOHO_REFRESH_TOKEN }}
+          ZOHO_DATACENTER: eu
+        run: python koppeling.py workorders-all --until all
+
+      - name: Offertes synchroniseren
+        env:
+          OUTSMART_TOKEN: ${{ secrets.OUTSMART_TOKEN }}
+          OUTSMART_SOFTWARE_TOKEN: ${{ secrets.OUTSMART_SOFTWARE_TOKEN }}
+          ZOHO_CLIENT_ID: ${{ secrets.ZOHO_CLIENT_ID }}
+          ZOHO_CLIENT_SECRET: ${{ secrets.ZOHO_CLIENT_SECRET }}
+          ZOHO_REFRESH_TOKEN: ${{ secrets.ZOHO_REFRESH_TOKEN }}
+          ZOHO_DATACENTER: eu
+        run: python koppeling.py quotations
